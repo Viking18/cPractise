@@ -36,6 +36,7 @@ public:
 //    bool        isFull();
     bool        isEmpty();
 
+    bool checkBlock(void *p);
 };
 
 
