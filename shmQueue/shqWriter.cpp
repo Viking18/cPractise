@@ -15,7 +15,7 @@ void  thread_do(void * args)
     shmQueue* shmQueue1 = (shmQueue*) args;
     char buffer[256];
     for(int i=0;i<5;i++) {
-        sprintf(buffer, "thread:%d, message.", pthread_self());
+        sprintf(buffer, "thread:%d, message %d.",(long) pthread_self() %177, i);
         shmQueue1->write(buffer, sizeof(buffer));
     }
 }
@@ -54,6 +54,8 @@ int main(){
     {
         pool->submit(thread_do, queue);
     }
+
+    for(int i=0;i<1000;i++);
 
 //    char    buffer[256];
 //    for(int i=0;i<10;i++)

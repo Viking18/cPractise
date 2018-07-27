@@ -62,7 +62,7 @@ int shmQueue::write(void *p, size_t size)  // only write size<blocksize
     int oldWriteIndex, newWriteIndex;
     do {
         oldWriteIndex = *control->writeIndex;
-        newWriteIndex = oldWriteIndex + writeBlock;
+        newWriteIndex = (oldWriteIndex + writeBlock)% *control->maxLen;
     }while( !__sync_bool_compare_and_swap(control->writeIndex, oldWriteIndex, newWriteIndex));
     char * writeP =(char *) (control->blockSize + 1 + *control->blockSize * oldWriteIndex / sizeof(control->blockSize));
 
@@ -95,26 +95,40 @@ bool shmQueue::read(void * p)
 //    char * readP =(char *) *control->dataAddr + *control->blockSize * *control->readIndex;
     char * readP = (char *) (control->blockSize + 1 + *control->blockSize * *control->readIndex / sizeof(control->blockSize));
 
-    if(*control->readIndex + *(readP+1) >= *control->maxLen)
-    {
-        *control->readIndex = (*control->readIndex + *(readP+1)) % *control->maxLen;
-    }
-    else {
-        *control->readIndex += *(readP + 1);
-    }
-
+    //检测是否有效块
     if(!checkBlock(readP))
         usleep( 5000 );  //等待5ms
 
-    if(!checkBlock(readP))
-        return false; //仍然未就绪，说明该块坏了
+    if(!checkBlock(readP)) { //仍然未就绪，说明该块坏了
+        //跳过错误块
+        if(*control->readIndex + 1 >= *control->maxLen)
+        {
+            *control->readIndex = (*control->readIndex + 1) % *control->maxLen;
+        }
+        else {
+            *control->readIndex += 1;
+        }
+        return false;
+    }
 
-    //确定能读取的块 check block head
-    while(*readP == READABLE)
+    //是有效快， 增加readIndex
+    int readBlock = *(readP+1);
+    if(*control->readIndex + readBlock >= *control->maxLen)
     {
-        memcpy(p, readP, *control->blockSize);
+        *control->readIndex = (*control->readIndex + readBlock) % *control->maxLen;
+    }
+    else {
+        *control->readIndex += readBlock;
+    }
+
+    //读取块
+    int i=0;
+    while(checkBlock(readP) && i<readBlock)
+    {
+        memcpy(p, readP+3, *control->blockSize);
         *readP = WRITABLE;
         (readP += *control->blockSize/ sizeof(readP))>*control->maxDataAddr? (readP=(char*)(control->blockSize+1)) : 0;
+        i++;
     }
 
     return true;
